@@ -5,11 +5,19 @@ Game::Game()
 {
 	Reset();
 }
+Game::~Game()
+{
+
+}
 
 void Game::Reset()
 {
 	Console::SetWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
 	Console::CursorVisible(false);
+
+	gameWon = false; 
+	gameLost = false; 
+
 	paddle.width = 12;
 	paddle.height = 2;
 	paddle.x_position = 32;
@@ -19,13 +27,26 @@ void Game::Reset()
 	ball.color = ConsoleColor::Cyan;
 	ResetBall();
 
+	 // Clear vector for reset. 
+	bricks.clear();
+	brickHits.clear();
+
+
 	// TODO #2 - Add this brick and 4 more bricks to the vector
-	brick.width = 10;
-	brick.height = 2;
-	brick.x_position = 0;
-	brick.y_position = 5;
-	brick.doubleThick = true;
-	brick.color = ConsoleColor::DarkGreen;
+	for (int i = 0; i < 5; i++)
+	{
+		Box newBrick;
+
+		newBrick.width = 10;
+		newBrick.height = 2;
+		newBrick.x_position = 3 + i * 15;//Space bricks out across the top of the window.
+		newBrick.y_position = 5;
+		newBrick.doubleThick = true;
+		newBrick.color = ConsoleColor::DarkGreen;
+
+		bricks.push_back(newBrick);//Add new brick to vector.
+		brickHits.push_back(0); //Initialize hit count for each brick to 0.
+	}
 }
 
 void Game::ResetBall()
@@ -42,6 +63,12 @@ bool Game::Update()
 	if (GetAsyncKeyState(VK_ESCAPE) & 0x1)
 		return false;
 
+	if (GetAsyncKeyState('R') & 0x1)
+		Reset();
+
+	if (gameWon || gameLost)	
+		return true;
+
 	if (GetAsyncKeyState(VK_RIGHT) && paddle.x_position < WINDOW_WIDTH - paddle.width)
 		paddle.x_position += 2;
 
@@ -51,11 +78,11 @@ bool Game::Update()
 	if (GetAsyncKeyState(VK_SPACE) & 0x1)
 		ball.moving = !ball.moving;
 
-	if (GetAsyncKeyState('R') & 0x1)
-		Reset();
+	
 
 	ball.Update();
 	CheckCollision();
+
 	return true;
 }
 
@@ -69,7 +96,30 @@ void Game::Render() const
 	ball.Draw();
 
 	// TODO #3 - Update render to render all bricks
-	brick.Draw();
+	for (int i = 0; i < bricks.size(); i++)
+	{
+		bricks[i].Draw();
+	}
+
+	if (gameWon)
+	{
+		Console::WordWrap(
+			WINDOW_WIDTH / 2 - 16,
+			WINDOW_HEIGHT / 2,
+			40,
+			"You win! Press R to play again."
+		);
+	}
+
+	if (gameLost)
+	{
+		Console::WordWrap(
+			WINDOW_WIDTH / 2 - 16,
+			WINDOW_HEIGHT / 2,
+			40,
+			"You lose. Press R to play again."
+		);
+	}
 
 	Console::Lock(false);
 }
@@ -77,22 +127,51 @@ void Game::Render() const
 void Game::CheckCollision()
 {
 	// TODO #4 - Update collision to check all bricks
-	if (brick.Contains(ball.x_position + ball.x_velocity, ball.y_position + ball.y_velocity))
+	for (int i = 0; i < bricks.size(); i++)//Loop through all bricks to check for collision.
 	{
-		brick.color = ConsoleColor(brick.color - 1);
-		ball.y_velocity *= -1;
+		if (bricks[i].Contains(ball.x_position + ball.x_velocity, ball.y_position + ball.y_velocity))
+		{
+			ball.y_velocity *= -1; // Bounce the ball.
 
-		// TODO #5 - If the ball hits the same brick 3 times (color == black), remove it from the vector
+			brickHits[i]++;//Increment hit count for this brick.
 
+			if (brickHits[i] == 1) // Change the brick color after each hit so damage is visible.
+
+			{
+				bricks[i].color = ConsoleColor::DarkYellow;
+			}
+			else if (brickHits[i] == 2)
+			{
+				bricks[i].color = ConsoleColor::DarkRed;
+			}
+
+			// TODO #5 - If the ball hits the same brick 3 times, remove it from the vector
+			if (brickHits[i] >= 3) //If hit count reaches 3, remove the brick from the vector.
+			{
+				bricks.erase(bricks.begin() + i); //Remove the brick from the vector.
+				brickHits.erase(brickHits.begin() + i); 
+			}
+
+			break;
+		}
 	}
 
-	// TODO #6 - If no bricks remain, pause ball and display (render) victory text with R to reset
-
-
-	if (paddle.Contains(ball.x_position + ball.x_velocity, ball.y_velocity + ball.y_position))
+	// TODO #6 - If no bricks remain, pause ball and display victory text in Render
+	if (bricks.empty()) //If there are no bricks left, the player wins.
 	{
-		ball.y_velocity *= -1;
+		gameWon = true;
+		ball.moving = false;
 	}
 
-	// TODO #7 - If ball touches bottom of window, pause ball and display (render) defeat text with R to reset
+	if (paddle.Contains(ball.x_position + ball.x_velocity, ball.y_velocity + ball.y_position)) // If the ball hits the paddle, bounce it.
+	{
+		ball.y_velocity *= -1; // Bounce the ball.
+	}
+
+	// TODO #7 - If ball touches bottom of window, pause ball and display defeat text in Render
+	if (ball.y_position >= WINDOW_HEIGHT - 1) //If the ball touches the bottom of the window, the player loses.
+	{
+		gameLost = true;
+		ball.moving = false;
+	}
 }
